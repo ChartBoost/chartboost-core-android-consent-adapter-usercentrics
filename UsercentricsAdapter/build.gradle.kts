@@ -55,7 +55,7 @@ android {
 }
 
 dependencies {
-    "localImplementation"(project(":chartboostcore"))
+    "localImplementation"(project(":ChartboostCore"))
     // For external usage, please use the following production dependency.
     // You may choose a different release version.
     "remoteImplementation"("com.chartboost:chartboost-core-sdk:0.1.0")
