@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023 Chartboost, Inc.
+ * Copyright 2023 Chartboost, Inc.
  * 
  * Use of this source code is governed by an MIT-style
  * license that can be found in the LICENSE file.
@@ -12,6 +12,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("maven-publish")
     id("com.jfrog.artifactory")
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven("https://cboost.jfrog.io/artifactory/private-chartboost-core/") {
+        credentials {
+            username = System.getenv("JFROG_USER")
+            password = System.getenv("JFROG_PASS")
+        }
+    }
+    maven("https://cboost.jfrog.io/artifactory/chartboost-core/")
 }
 
 android {

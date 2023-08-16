@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023 Chartboost, Inc.
+ * Copyright 2023 Chartboost, Inc.
  *
  * Use of this source code is governed by an MIT-style
  * license that can be found in the LICENSE file.
@@ -45,16 +45,16 @@ import kotlin.coroutines.resume
 class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
 
     companion object {
-        const val OPTIONS_KEY: String = "options"
-        const val SETTINGS_ID_KEY: String = "settingsId"
-        const val DEFAULT_LANGUAGE_KEY: String = "defaultLanguage"
-        const val VERSION_KEY: String = "version"
-        const val TIMEOUT_MILLIS_KEY: String = "timeoutMillis"
-        const val LOGGER_LEVEL_KEY: String = "loggerLevel"
-        const val RULE_SET_ID_KEY: String = "ruleSetId"
         const val CONSENT_MEDIATION: String = "consentMediation"
         const val CHARTBOOST_CORE_DPS_KEY: String = "coreDpsName"
         const val DEFAULT_CHARTBOOST_CORE_DPS = "ChartboostCore"
+        const val DEFAULT_LANGUAGE_KEY: String = "defaultLanguage"
+        const val LOGGER_LEVEL_KEY: String = "loggerLevel"
+        const val OPTIONS_KEY: String = "options"
+        const val RULE_SET_ID_KEY: String = "ruleSetId"
+        const val SETTINGS_ID_KEY: String = "settingsId"
+        const val TIMEOUT_MILLIS_KEY: String = "timeoutMillis"
+        const val VERSION_KEY: String = "version"
 
         /**
          * Use this to change the look and feel of the Usercentrics consent dialogs.
@@ -148,7 +148,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 }
 
                 else -> {
-                    ChartboostCoreLogger.d("Unexpected dialog type: $dialogType")
+                    ChartboostCoreLogger.d("Unexpected consent dialog type: $dialogType")
                     Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.DialogShowError))
                 }
             }
@@ -199,10 +199,10 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     }
 
     private fun consentStatusSourceToUsercentricsConsentType(statusSource: ConsentStatusSource): UsercentricsConsentType {
-        if (statusSource == ConsentStatusSource.USER) {
-            return UsercentricsConsentType.EXPLICIT
-        } else {
-            return UsercentricsConsentType.IMPLICIT
+        return when(statusSource) {
+            ConsentStatusSource.USER -> UsercentricsConsentType.EXPLICIT
+            ConsentStatusSource.DEVELOPER -> UsercentricsConsentType.IMPLICIT
+            else -> UsercentricsConsentType.IMPLICIT
         }
     }
 
