@@ -23,6 +23,7 @@ import com.chartboost.core.consent.DefaultConsentValue
 import com.chartboost.core.error.ChartboostCoreError
 import com.chartboost.core.error.ChartboostCoreException
 import com.chartboost.core.initialization.InitializableModule
+import com.chartboost.core.initialization.ModuleInitializationConfiguration
 import com.usercentrics.ccpa.CCPAData
 import com.usercentrics.sdk.BannerSettings
 import com.usercentrics.sdk.Usercentrics
@@ -206,7 +207,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         }
     }
 
-    override suspend fun initialize(context: Context): Result<Unit> {
+    override suspend fun initialize(context: Context, moduleInitializationConfiguration: ModuleInitializationConfiguration): Result<Unit> {
         val options = options
             ?: return Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.InitializationError))
         initializeUsercentrics(context, options)
