@@ -3,6 +3,9 @@
 Note the first digit of every adapter version corresponds to the major version of the Chartboost Core SDK compatible with that adapter. 
 Adapters are compatible with any Chartboost Core SDK version within that major version.
 
+### 0.2.8.1.3
+- This version of the adapter is compatible with Chartboost Core 0.3.0+.
+
 ### 0.2.8.1.2
 - Fix a bug around callbacks not firing when consent changes.
 

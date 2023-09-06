@@ -35,7 +35,6 @@ import com.usercentrics.sdk.models.common.UsercentricsLoggerLevel
 import com.usercentrics.sdk.models.settings.UsercentricsConsentType
 import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.serialization.json.Json.Default.configuration
 import org.json.JSONObject
 import java.lang.IllegalArgumentException
 import kotlin.coroutines.resume
