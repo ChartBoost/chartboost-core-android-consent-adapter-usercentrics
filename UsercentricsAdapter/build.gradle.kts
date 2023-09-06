@@ -70,7 +70,7 @@ dependencies {
     "localImplementation"(project(":ChartboostCore"))
     // For external usage, please use the following production dependency.
     // You may choose a different release version.
-    "remoteImplementation"("com.chartboost:chartboost-core-sdk:0.2.0")
+    "remoteImplementation"("com.chartboost:chartboost-core-sdk:0.3.0")
 
     // Consent Management Platform SDK
     implementation("com.usercentrics.sdk:usercentrics-ui:2.8.1")
