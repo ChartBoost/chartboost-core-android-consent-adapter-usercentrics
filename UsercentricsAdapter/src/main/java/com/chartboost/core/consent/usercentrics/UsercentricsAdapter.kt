@@ -33,12 +33,8 @@ import com.usercentrics.sdk.UsercentricsOptions
 import com.usercentrics.sdk.UsercentricsReadyStatus
 import com.usercentrics.sdk.models.common.UsercentricsLoggerLevel
 import com.usercentrics.sdk.models.settings.UsercentricsConsentType
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.json.Json.Default.configuration
 import org.json.JSONObject
 import java.lang.IllegalArgumentException
 import kotlin.coroutines.resume
@@ -102,7 +98,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
 
     override val moduleId: String = "usercentrics"
 
-    override val moduleVersion: String = "0.2.8.1.0" // TODO Change when moving to repo
+    override val moduleVersion: String = BuildConfig.CHARTBOOST_CORE_USERCENTRICS_ADAPTER_VERSION
 
     override var shouldCollectConsent: Boolean = true
         private set
@@ -241,33 +237,35 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         block: suspend (usercentricsReadyStatus: UsercentricsReadyStatus) -> Result<Unit>
     ): Result<Unit> {
         return suspendCancellableCoroutine { continuation ->
+            fun resumeOnce(result: Result<Unit>) {
+                if (continuation.isActive) {
+                    continuation.resume(result)
+                }
+            }
             Usercentrics.isReady({ readyStatus ->
-                CoroutineScope(dispatcher).launch {
-                    if (continuation.isActive) {
-                        continuation.resume(block(readyStatus))
-                    }
+                CoroutineScope(dispatcher).launch(CoroutineExceptionHandler { _, exception ->
+                    ChartboostCoreLogger.w("$exception when executing usercentrics action.")
+                    resumeOnce(Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.Unknown)))
+                }) {
+                    resumeOnce(block(readyStatus))
                 }
             }, {
                 options?.let { options ->
                     initializeUsercentrics(context, options)
                     Usercentrics.isReady({ readyStatus ->
                         CoroutineScope(dispatcher).launch {
-                            if (continuation.isActive) {
-                                continuation.resume(block(readyStatus))
-                            }
+                            resumeOnce(block(readyStatus))
                         }
                     }, { error ->
                         ChartboostCoreLogger.d("$error when retrying initialization. Clearing consents")
                         resetConsentsAndNotify()
-                        if (continuation.isActive) {
-                            continuation.resume(
-                                Result.failure(
-                                    ChartboostCoreException(
-                                        ChartboostCoreError.ConsentError.InitializationError
-                                    )
+                        resumeOnce(
+                            Result.failure(
+                                ChartboostCoreException(
+                                    ChartboostCoreError.ConsentError.InitializationError
                                 )
                             )
-                        }
+                        )
                     })
                 } ?: run {
                     if (continuation.isActive) {
@@ -322,13 +320,14 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     ) {
         val nullableNewUspString = newUspString.ifEmpty { null }
         ChartboostCoreLogger.d("Setting USP to $nullableNewUspString")
+        val previousUsp = consents[DefaultConsentStandard.USP.value]?.ifEmpty { null }
         if (nullableNewUspString.isNullOrEmpty()) {
             mutableConsents.remove(DefaultConsentStandard.USP.value)
         } else {
             mutableConsents[DefaultConsentStandard.USP.value] = newUspString
         }
         when (notify) {
-            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (consents[DefaultConsentStandard.USP.value] != nullableNewUspString) Utils.safeExecute {
+            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousUsp != nullableNewUspString) Utils.safeExecute {
                 listener?.onConsentChangeForStandard(
                     DefaultConsentStandard.USP.value, newUspString
                 )
@@ -354,13 +353,13 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
             false -> DefaultConsentValue.GRANTED.value
             else -> null
         }
-        val oldCcpaOptIn = consents[DefaultConsentStandard.CCPA_OPT_IN.value]
+        val previousCcpaOptIn = consents[DefaultConsentStandard.CCPA_OPT_IN.value]
         newCcpaOptIn?.let {
             mutableConsents[DefaultConsentStandard.CCPA_OPT_IN.value] = it
         } ?: mutableConsents.remove(DefaultConsentStandard.CCPA_OPT_IN.value)
         ChartboostCoreLogger.d("Setting CCPA opt in to $newCcpaOptIn")
         when (notify) {
-            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (oldCcpaOptIn != newCcpaOptIn) Utils.safeExecute {
+            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousCcpaOptIn != newCcpaOptIn) Utils.safeExecute {
                 listener?.onConsentChangeForStandard(
                     DefaultConsentStandard.CCPA_OPT_IN.value, newCcpaOptIn
                 )
@@ -381,7 +380,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     ) {
         return suspendCancellableCoroutine { continuation ->
             Usercentrics.instance.getTCFData {
-                val oldTcfString = consents[DefaultConsentStandard.TCF.value]
+                val previousTcfString = consents[DefaultConsentStandard.TCF.value]
                 val newTcfString = it.tcString.ifEmpty { null }
 
                 ChartboostCoreLogger.d("Setting TCF to $newTcfString")
@@ -392,7 +391,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 }
 
                 when (notify) {
-                    NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (newTcfString != oldTcfString) Utils.safeExecute {
+                    NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (newTcfString != previousTcfString) Utils.safeExecute {
                         listener?.onConsentChangeForStandard(
                             DefaultConsentStandard.TCF.value, newTcfString
                         )
@@ -423,10 +422,11 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                     if (it.status) ConsentStatus.GRANTED else ConsentStatus.DENIED
                 } ?: ConsentStatus.UNKNOWN
 
+        val previousConsentStatus = consentStatus
         consentStatus = newConsentStatus
         ChartboostCoreLogger.d("Setting consent status to $newConsentStatus")
         when (notify) {
-            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (consentStatus != newConsentStatus) Utils.safeExecute {
+            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousConsentStatus != newConsentStatus) Utils.safeExecute {
                 listener?.onConsentStatusChange(newConsentStatus)
             }
 

@@ -34,7 +34,7 @@ android {
         minSdk = 21
         targetSdk = 33
         // If you touch the following line, don't forget to update scripts/get_rc_version.zsh
-        android.defaultConfig.versionName = System.getenv("VERSION_OVERRIDE") ?: "0.2.8.1.0"
+        android.defaultConfig.versionName = System.getenv("VERSION_OVERRIDE") ?: "0.2.8.1.3"
 
         buildConfigField(
             "String",
@@ -70,7 +70,7 @@ dependencies {
     "localImplementation"(project(":ChartboostCore"))
     // For external usage, please use the following production dependency.
     // You may choose a different release version.
-    "remoteImplementation"("com.chartboost:chartboost-core-sdk:0.1.0")
+    "remoteImplementation"("com.chartboost:chartboost-core-sdk:0.3.0")
 
     // Consent Management Platform SDK
     implementation("com.usercentrics.sdk:usercentrics-ui:2.8.1")
