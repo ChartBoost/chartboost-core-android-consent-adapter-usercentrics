@@ -31,12 +31,16 @@ import com.usercentrics.sdk.UsercentricsBanner
 import com.usercentrics.sdk.UsercentricsEvent
 import com.usercentrics.sdk.UsercentricsOptions
 import com.usercentrics.sdk.UsercentricsReadyStatus
+import com.usercentrics.sdk.UsercentricsServiceConsent
 import com.usercentrics.sdk.models.common.UsercentricsLoggerLevel
 import com.usercentrics.sdk.models.settings.UsercentricsConsentType
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
-import java.lang.IllegalArgumentException
 import kotlin.coroutines.resume
 
 class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
@@ -48,6 +52,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         const val DEFAULT_LANGUAGE_KEY: String = "defaultLanguage"
         const val LOGGER_LEVEL_KEY: String = "loggerLevel"
         const val OPTIONS_KEY: String = "options"
+        const val PARTNER_ID_MAP_KEY: String = "partnerIdMap"
         const val RULE_SET_ID_KEY: String = "ruleSetId"
         const val SETTINGS_ID_KEY: String = "settingsId"
         const val TIMEOUT_MILLIS_KEY: String = "timeoutMillis"
@@ -63,13 +68,18 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
 
     constructor(
         options: UsercentricsOptions,
+        templateIdToPartnerIdMap: Map<String, String>,
         chartboostCoreDpsName: String = DEFAULT_CHARTBOOST_CORE_DPS,
-    ) : this(options) {
+    ) : this(options, templateIdToPartnerIdMap) {
         this@UsercentricsAdapter.chartboostCoreDpsName = chartboostCoreDpsName
     }
 
-    constructor(options: UsercentricsOptions) : this() {
+    constructor(
+        options: UsercentricsOptions,
+        templateIdToPartnerIdMap: Map<String, String>
+    ) : this() {
         this@UsercentricsAdapter.options = options
+        this@UsercentricsAdapter.templateIdToPartnerIdMap.putAll(templateIdToPartnerIdMap)
     }
 
     override fun updateProperties(configuration: JSONObject) {
@@ -84,6 +94,10 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
             stringToUsercentricsLoggerLevel(optionsJson.optString(LOGGER_LEVEL_KEY, "debug"))
         val ruleSetId = optionsJson.optString(RULE_SET_ID_KEY, "")
         val consentMediation = optionsJson.optBoolean(CONSENT_MEDIATION, false)
+        val partnerIdMapJsonObject = configuration.optJSONObject(PARTNER_ID_MAP_KEY)
+        partnerIdMapJsonObject?.keys()?.forEach {
+            templateIdToPartnerIdMap[it] = partnerIdMapJsonObject.optString(it)
+        }
 
         options = UsercentricsOptions(
             settingsId = settingsId,
@@ -111,6 +125,11 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     override var consentStatus: ConsentStatus = ConsentStatus.UNKNOWN
         private set
 
+    override val partnerConsentStatus: Map<String, ConsentStatus>
+        get() = mutablePartnerConsentStatus
+
+    private val mutablePartnerConsentStatus = mutableMapOf<String, ConsentStatus>()
+
     override var listener: ConsentAdapterListener? = null
 
     /*
@@ -123,6 +142,8 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
      * Options to initialize Usercentrics.
      */
     var options: UsercentricsOptions? = null
+
+    private val templateIdToPartnerIdMap: MutableMap<String, String> = mutableMapOf()
 
     override suspend fun showConsentDialog(
         activity: Activity, dialogType: ConsentDialogType
@@ -162,7 +183,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 )
             )
             fetchConsentInfo(
-                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents
+                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents, partnerConsentStatus
             )
         }
     }
@@ -177,7 +198,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 )
             )
             fetchConsentInfo(
-                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents
+                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents, partnerConsentStatus
             )
         }
     }
@@ -186,12 +207,14 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         val options = options ?: UsercentricsOptions()
         val oldConsentStatus = consentStatus
         val oldConsents = mutableConsents.toMap()
+        val oldPartnerConsents = mutablePartnerConsentStatus.toMap()
         consentStatus = ConsentStatus.UNKNOWN
         mutableConsents.clear()
+        mutablePartnerConsentStatus.clear()
         Usercentrics.reset()
         initializeUsercentrics(context, options)
         return fetchConsentInfo(
-            context, NotificationType.DIFFERENT_FROM_CACHED_VALUE, oldConsentStatus, oldConsents
+            context, NotificationType.DIFFERENT_FROM_CACHED_VALUE, oldConsentStatus, oldConsents, oldPartnerConsents
         )
     }
 
@@ -209,7 +232,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         initializeUsercentrics(context, options)
 
         // This waits for Usercentrics.isReady()
-        return fetchConsentInfo(context, NotificationType.NEVER, consentStatus, consents)
+        return fetchConsentInfo(context, NotificationType.NEVER, consentStatus, consents, partnerConsentStatus)
     }
 
     private fun initializeUsercentrics(context: Context, options: UsercentricsOptions) {
@@ -222,7 +245,8 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                         context,
                         NotificationType.DIFFERENT_FROM_CURRENT_VALUE,
                         consentStatus,
-                        consents
+                        consents,
+                        partnerConsentStatus
                     )
                 }
             }
@@ -286,11 +310,12 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         context: Context,
         notify: NotificationType,
         oldConsentStatus: ConsentStatus,
-        oldConsents: Map<ConsentStandard, ConsentValue?>
+        oldConsents: Map<ConsentStandard, ConsentValue?>,
+        oldPartnerConsents: Map<String, ConsentStatus>,
     ): Result<Unit> {
         return executeWhenUsercentricsInitialized(context) { usercentricsReadyStatus ->
             updateConsents(
-                usercentricsReadyStatus, notify, oldConsentStatus, oldConsents
+                usercentricsReadyStatus, notify, oldConsentStatus, oldConsents, oldPartnerConsents
             )
             Result.success(Unit)
         }
@@ -300,7 +325,8 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         usercentricsReadyStatus: UsercentricsReadyStatus,
         notify: NotificationType,
         oldConsentStatus: ConsentStatus,
-        oldConsents: Map<ConsentStandard, ConsentValue?>
+        oldConsents: Map<ConsentStandard, ConsentValue?>,
+        oldPartnerConsents: Map<String, ConsentStatus>,
     ) {
         shouldCollectConsent = usercentricsReadyStatus.shouldCollectConsent
 
@@ -311,6 +337,8 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         val uspData = Usercentrics.instance.getUSPData()
         updateCcpaOptIn(uspData, notify, oldConsents)
         updateUsp(uspData.uspString, notify, oldConsents)
+
+        updatePartnerConsents(usercentricsReadyStatus.consents, notify, oldPartnerConsents)
     }
 
     private fun updateUsp(
@@ -419,7 +447,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         val newConsentStatus =
             usercentricsReadyStatus.consents.find { it.dataProcessor == chartboostCoreDpsName }
                 ?.let {
-                    if (it.status) ConsentStatus.GRANTED else ConsentStatus.DENIED
+                    toConsentStatus(it.status)
                 } ?: ConsentStatus.UNKNOWN
 
         val previousConsentStatus = consentStatus
@@ -437,6 +465,33 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
             else -> Unit
         }
     }
+
+    private fun updatePartnerConsents(
+        consents: List<UsercentricsServiceConsent>,
+        notify: NotificationType,
+        oldPartnerConsents: Map<String, ConsentStatus>
+    ) {
+        consents.forEach { consent ->
+            val partnerId = templateIdToPartnerIdMap[consent.templateId] ?: consent.templateId
+            val previousConsentStatus = partnerConsentStatus[partnerId] ?: ConsentStatus.UNKNOWN
+            val newConsentStatus = toConsentStatus(consent.status)
+            mutablePartnerConsentStatus[partnerId] = newConsentStatus
+            when (notify) {
+                NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousConsentStatus != newConsentStatus) Utils.safeExecute {
+                    listener?.onPartnerConsentStatusChange(partnerId, newConsentStatus)
+                }
+
+                NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if ((oldPartnerConsents[partnerId] ?: ConsentStatus.UNKNOWN) != newConsentStatus) Utils.safeExecute {
+                    listener?.onPartnerConsentStatusChange(partnerId, newConsentStatus)
+                }
+
+                else -> Unit
+            }
+        }
+    }
+
+    private fun toConsentStatus(status: Boolean): ConsentStatus =
+        if (status) ConsentStatus.GRANTED else ConsentStatus.DENIED
 
     private fun stringToUsercentricsLoggerLevel(loggerLevel: String?): UsercentricsLoggerLevel {
         return try {
