@@ -76,7 +76,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
 
     constructor(
         options: UsercentricsOptions,
-        templateIdToPartnerIdMap: Map<String, String>
+        templateIdToPartnerIdMap: Map<String, String>,
     ) : this() {
         this@UsercentricsAdapter.options = options
         this@UsercentricsAdapter.templateIdToPartnerIdMap.putAll(templateIdToPartnerIdMap)
@@ -469,7 +469,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     private fun updatePartnerConsents(
         consents: List<UsercentricsServiceConsent>,
         notify: NotificationType,
-        oldPartnerConsents: Map<String, ConsentStatus>
+        oldPartnerConsents: Map<String, ConsentStatus>,
     ) {
         consents.forEach { consent ->
             val partnerId = templateIdToPartnerIdMap[consent.templateId] ?: consent.templateId
