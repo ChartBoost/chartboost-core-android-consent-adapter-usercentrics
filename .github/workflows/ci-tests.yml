@@ -30,4 +30,4 @@ jobs:
           JFROG_USER: ${{ secrets.JFROG_USER }}
           JFROG_PASS: ${{ secrets.JFROG_PASS }}
           CHARTBOOST_CORE_IS_RELEASE: 'false'
-        run: ./gradlew buildRemote
+        run: ./gradlew assembleRemote
