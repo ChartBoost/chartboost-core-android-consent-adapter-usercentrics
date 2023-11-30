@@ -8,7 +8,7 @@ on:
 jobs:
   usercentrics-release:
     # Always run on the m1 self-hosted runner.
-    runs-on: [ self-hosted, m1 ]
+    runs-on: ubuntu-latest
     environment: CI
 
     steps:
