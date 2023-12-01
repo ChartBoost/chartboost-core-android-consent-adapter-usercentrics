@@ -511,7 +511,13 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
         Utils.safeExecute {
             listener?.onConsentStatusChange(ConsentStatus.UNKNOWN)
         }
+        partnerConsentStatus.forEach {
+            Utils.safeExecute {
+                listener?.onPartnerConsentStatusChange(it.key, ConsentStatus.UNKNOWN)
+            }
+        }
         mutableConsents.clear()
+        mutablePartnerConsentStatus.clear()
     }
 
     /**
