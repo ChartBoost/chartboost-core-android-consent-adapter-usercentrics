@@ -3,6 +3,9 @@
 Note the first digit of every adapter version corresponds to the major version of the Chartboost Core SDK compatible with that adapter. 
 Adapters are compatible with any Chartboost Core SDK version within that major version.
 
+### 0.2.8.1.5 *(2023-12-01)*
+- Fix notifications for partner consent status when Usercentrics errors on init.
+
 ### 0.2.8.1.4 *(2023-11-29)*
 - This version of the adapter is compatible with Chartboost Core 0.4.0
 - Added the ability to set a Template ID to Mediation Partner ID map to facilitate per-partner consent.
