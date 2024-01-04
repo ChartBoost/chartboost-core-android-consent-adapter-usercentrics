@@ -18,7 +18,7 @@ jobs:
 
       - name: set up JDK 17
         uses: actions/setup-java@v3
-        timeout-minutes: 10
+        timeout-minutes: 15
         with:
           java-version: '17'
           distribution: 'temurin'
