@@ -39,6 +39,8 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         const val SETTINGS_ID_KEY: String = "settingsId"
         const val TIMEOUT_MILLIS_KEY: String = "timeoutMillis"
         const val VERSION_KEY: String = "version"
+        const val moduleId = "usercentrics"
+        const val moduleVersion = BuildConfig.CHARTBOOST_CORE_USERCENTRICS_ADAPTER_VERSION
 
         /**
          * Use this to change the look and feel of the Usercentrics consent dialogs.
@@ -84,9 +86,9 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         )
     }
 
-    override val moduleId: String = "usercentrics"
+    override val moduleId: String = Companion.moduleId
 
-    override val moduleVersion: String = BuildConfig.CHARTBOOST_CORE_USERCENTRICS_ADAPTER_VERSION
+    override val moduleVersion: String = Companion.moduleVersion
 
     override var shouldCollectConsent: Boolean = true
         private set
