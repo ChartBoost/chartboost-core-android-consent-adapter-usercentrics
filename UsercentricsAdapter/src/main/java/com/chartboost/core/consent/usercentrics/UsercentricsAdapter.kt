@@ -11,39 +11,21 @@ import android.app.Activity
 import android.content.Context
 import com.chartboost.core.ChartboostCoreLogger
 import com.chartboost.core.Utils
-import com.chartboost.core.consent.ConsentAdapter
-import com.chartboost.core.consent.ConsentAdapterListener
-import com.chartboost.core.consent.ConsentDialogType
-import com.chartboost.core.consent.ConsentStandard
-import com.chartboost.core.consent.ConsentStatus
-import com.chartboost.core.consent.ConsentStatusSource
-import com.chartboost.core.consent.ConsentValue
-import com.chartboost.core.consent.DefaultConsentStandard
-import com.chartboost.core.consent.DefaultConsentValue
+import com.chartboost.core.consent.*
 import com.chartboost.core.error.ChartboostCoreError
 import com.chartboost.core.error.ChartboostCoreException
-import com.chartboost.core.initialization.InitializableModule
-import com.chartboost.core.initialization.ModuleInitializationConfiguration
+import com.chartboost.core.initialization.Module
+import com.chartboost.core.initialization.ModuleConfiguration
 import com.usercentrics.ccpa.CCPAData
-import com.usercentrics.sdk.BannerSettings
-import com.usercentrics.sdk.Usercentrics
-import com.usercentrics.sdk.UsercentricsBanner
-import com.usercentrics.sdk.UsercentricsEvent
-import com.usercentrics.sdk.UsercentricsOptions
-import com.usercentrics.sdk.UsercentricsReadyStatus
-import com.usercentrics.sdk.UsercentricsServiceConsent
+import com.usercentrics.sdk.*
 import com.usercentrics.sdk.models.common.UsercentricsLoggerLevel
 import com.usercentrics.sdk.models.settings.UsercentricsConsentType
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineExceptionHandler
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.Dispatchers.Main
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
-class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
+class UsercentricsAdapter() : ConsentAdapter, Module {
 
     companion object {
         const val CONSENT_MEDIATION: String = "consentMediation"
@@ -69,20 +51,12 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     constructor(
         options: UsercentricsOptions,
         templateIdToPartnerIdMap: Map<String, String>,
-        chartboostCoreDpsName: String = DEFAULT_CHARTBOOST_CORE_DPS,
-    ) : this(options, templateIdToPartnerIdMap) {
-        this@UsercentricsAdapter.chartboostCoreDpsName = chartboostCoreDpsName
-    }
-
-    constructor(
-        options: UsercentricsOptions,
-        templateIdToPartnerIdMap: Map<String, String>,
     ) : this() {
         this@UsercentricsAdapter.options = options
         this@UsercentricsAdapter.templateIdToPartnerIdMap.putAll(templateIdToPartnerIdMap)
     }
 
-    override fun updateProperties(configuration: JSONObject) {
+    override fun updateProperties(context: Context, configuration: JSONObject) {
         chartboostCoreDpsName =
             configuration.optString(CHARTBOOST_CORE_DPS_KEY, DEFAULT_CHARTBOOST_CORE_DPS)
         val optionsJson = configuration.optJSONObject(OPTIONS_KEY) ?: JSONObject()
@@ -117,20 +91,26 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     override var shouldCollectConsent: Boolean = true
         private set
 
-    override val consents: Map<ConsentStandard, ConsentValue>
+    override val consents: Map<ConsentKey, ConsentValue>
         get() = mutableConsents
 
-    private val mutableConsents = mutableMapOf<ConsentStandard, ConsentValue>()
+    private val mutableConsents = mutableMapOf<ConsentKey, ConsentValue>()
 
-    override var consentStatus: ConsentStatus = ConsentStatus.UNKNOWN
-        private set
+    /**
+     * This map is just to keep track of partner consents so we don't have to go from consent
+     * status and String. All of these should also live in consents.
+     */
+    private val partnerConsentStatus: MutableMap<String, ConsentStatus> = mutableMapOf()
 
-    override val partnerConsentStatus: Map<String, ConsentStatus>
-        get() = mutablePartnerConsentStatus
-
-    private val mutablePartnerConsentStatus = mutableMapOf<String, ConsentStatus>()
+    override val sharedPreferencesIabStrings: MutableMap<String, String> = mutableMapOf()
+    override val sharedPreferenceChangeListener: ConsentAdapter.IabSharedPreferencesListener =
+        ConsentAdapter.IabSharedPreferencesListener(sharedPreferencesIabStrings)
 
     override var listener: ConsentAdapterListener? = null
+        set(value) {
+            field = value
+            sharedPreferenceChangeListener.listener = value
+        }
 
     /*
      * The name of the Usercentrics Data Processing Service (DPS) defined in the Usercentrics
@@ -174,7 +154,7 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     }
 
     override suspend fun grantConsent(
-        context: Context, statusSource: ConsentStatusSource
+        context: Context, statusSource: ConsentSource
     ): Result<Unit> {
         return executeWhenUsercentricsInitialized(context) {
             Usercentrics.instance.acceptAll(
@@ -183,13 +163,13 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 )
             )
             fetchConsentInfo(
-                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents, partnerConsentStatus
+                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consents, partnerConsentStatus,
             )
         }
     }
 
     override suspend fun denyConsent(
-        context: Context, statusSource: ConsentStatusSource
+        context: Context, statusSource: ConsentSource
     ): Result<Unit> {
         return executeWhenUsercentricsInitialized(context) {
             Usercentrics.instance.denyAll(
@@ -198,41 +178,37 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                 )
             )
             fetchConsentInfo(
-                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consentStatus, consents, partnerConsentStatus
+                context, NotificationType.DIFFERENT_FROM_CURRENT_VALUE, consents, partnerConsentStatus,
             )
         }
     }
 
     override suspend fun resetConsent(context: Context): Result<Unit> {
         val options = options ?: UsercentricsOptions()
-        val oldConsentStatus = consentStatus
         val oldConsents = mutableConsents.toMap()
-        val oldPartnerConsents = mutablePartnerConsentStatus.toMap()
-        consentStatus = ConsentStatus.UNKNOWN
         mutableConsents.clear()
-        mutablePartnerConsentStatus.clear()
         Usercentrics.reset()
         initializeUsercentrics(context, options)
         return fetchConsentInfo(
-            context, NotificationType.DIFFERENT_FROM_CACHED_VALUE, oldConsentStatus, oldConsents, oldPartnerConsents
+            context, NotificationType.DIFFERENT_FROM_CACHED_VALUE, oldConsents, partnerConsentStatus,
         )
     }
 
-    private fun consentStatusSourceToUsercentricsConsentType(statusSource: ConsentStatusSource): UsercentricsConsentType {
+    private fun consentStatusSourceToUsercentricsConsentType(statusSource: ConsentSource): UsercentricsConsentType {
         return when(statusSource) {
-            ConsentStatusSource.USER -> UsercentricsConsentType.EXPLICIT
-            ConsentStatusSource.DEVELOPER -> UsercentricsConsentType.IMPLICIT
+            ConsentSource.USER -> UsercentricsConsentType.EXPLICIT
+            ConsentSource.DEVELOPER -> UsercentricsConsentType.IMPLICIT
             else -> UsercentricsConsentType.IMPLICIT
         }
     }
 
-    override suspend fun initialize(context: Context, moduleInitializationConfiguration: ModuleInitializationConfiguration): Result<Unit> {
+    override suspend fun initialize(context: Context, moduleConfiguration: ModuleConfiguration): Result<Unit> {
         val options = options
             ?: return Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.InitializationError))
         initializeUsercentrics(context, options)
 
         // This waits for Usercentrics.isReady()
-        return fetchConsentInfo(context, NotificationType.NEVER, consentStatus, consents, partnerConsentStatus)
+        return fetchConsentInfo(context, NotificationType.NEVER, consents, partnerConsentStatus)
     }
 
     private fun initializeUsercentrics(context: Context, options: UsercentricsOptions) {
@@ -244,12 +220,13 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
                     fetchConsentInfo(
                         context,
                         NotificationType.DIFFERENT_FROM_CURRENT_VALUE,
-                        consentStatus,
                         consents,
-                        partnerConsentStatus
+                        partnerConsentStatus,
                     )
                 }
             }
+            startObservingSharedPreferencesIabStrings(context)
+            mutableConsents.putAll(sharedPreferencesIabStrings)
         }, {
             ChartboostCoreLogger.d("Unable to attach onConsentUpdated listener")
         })
@@ -309,13 +286,12 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     private suspend fun fetchConsentInfo(
         context: Context,
         notify: NotificationType,
-        oldConsentStatus: ConsentStatus,
-        oldConsents: Map<ConsentStandard, ConsentValue?>,
+        oldConsents: Map<ConsentKey, ConsentValue?>,
         oldPartnerConsents: Map<String, ConsentStatus>,
     ): Result<Unit> {
         return executeWhenUsercentricsInitialized(context) { usercentricsReadyStatus ->
             updateConsents(
-                usercentricsReadyStatus, notify, oldConsentStatus, oldConsents, oldPartnerConsents
+                usercentricsReadyStatus, notify, oldConsents, oldPartnerConsents
             )
             Result.success(Unit)
         }
@@ -324,13 +300,10 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     private suspend fun updateConsents(
         usercentricsReadyStatus: UsercentricsReadyStatus,
         notify: NotificationType,
-        oldConsentStatus: ConsentStatus,
-        oldConsents: Map<ConsentStandard, ConsentValue?>,
+        oldConsents: Map<ConsentKey, ConsentValue?>,
         oldPartnerConsents: Map<String, ConsentStatus>,
     ) {
         shouldCollectConsent = usercentricsReadyStatus.shouldCollectConsent
-
-        updateConsentStatus(usercentricsReadyStatus, notify, oldConsentStatus)
 
         updateTcf(notify, oldConsents)
 
@@ -344,26 +317,26 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     private fun updateUsp(
         newUspString: String,
         notify: NotificationType,
-        cachedConsents: Map<ConsentStandard, ConsentValue?>
+        cachedConsents: Map<ConsentKey, ConsentValue?>
     ) {
         val nullableNewUspString = newUspString.ifEmpty { null }
         ChartboostCoreLogger.d("Setting USP to $nullableNewUspString")
-        val previousUsp = consents[DefaultConsentStandard.USP.value]?.ifEmpty { null }
+        val previousUsp = consents[DefaultConsentKey.USP.value]?.ifEmpty { null }
         if (nullableNewUspString.isNullOrEmpty()) {
-            mutableConsents.remove(DefaultConsentStandard.USP.value)
+            mutableConsents.remove(DefaultConsentKey.USP.value)
         } else {
-            mutableConsents[DefaultConsentStandard.USP.value] = newUspString
+            mutableConsents[DefaultConsentKey.USP.value] = newUspString
         }
         when (notify) {
             NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousUsp != nullableNewUspString) Utils.safeExecute {
-                listener?.onConsentChangeForStandard(
-                    DefaultConsentStandard.USP.value, newUspString
+                listener?.onConsentChange(
+                    DefaultConsentKey.USP.value
                 )
             }
 
-            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentStandard.USP.value] != nullableNewUspString) Utils.safeExecute {
-                listener?.onConsentChangeForStandard(
-                    DefaultConsentStandard.USP.value, newUspString
+            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.USP.value] != nullableNewUspString) Utils.safeExecute {
+                listener?.onConsentChange(
+                    DefaultConsentKey.USP.value
                 )
             }
 
@@ -374,28 +347,28 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     private fun updateCcpaOptIn(
         ccpaData: CCPAData,
         notify: NotificationType,
-        cachedConsents: Map<ConsentStandard, ConsentValue?>
+        cachedConsents: Map<ConsentKey, ConsentValue?>
     ) {
         val newCcpaOptIn = when (ccpaData.optedOut) {
             true -> DefaultConsentValue.DENIED.value
             false -> DefaultConsentValue.GRANTED.value
             else -> null
         }
-        val previousCcpaOptIn = consents[DefaultConsentStandard.CCPA_OPT_IN.value]
+        val previousCcpaOptIn = consents[DefaultConsentKey.CCPA_OPT_IN.value]
         newCcpaOptIn?.let {
-            mutableConsents[DefaultConsentStandard.CCPA_OPT_IN.value] = it
-        } ?: mutableConsents.remove(DefaultConsentStandard.CCPA_OPT_IN.value)
+            mutableConsents[DefaultConsentKey.CCPA_OPT_IN.value] = it
+        } ?: mutableConsents.remove(DefaultConsentKey.CCPA_OPT_IN.value)
         ChartboostCoreLogger.d("Setting CCPA opt in to $newCcpaOptIn")
         when (notify) {
             NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousCcpaOptIn != newCcpaOptIn) Utils.safeExecute {
-                listener?.onConsentChangeForStandard(
-                    DefaultConsentStandard.CCPA_OPT_IN.value, newCcpaOptIn
+                listener?.onConsentChange(
+                    DefaultConsentKey.CCPA_OPT_IN.value
                 )
             }
 
-            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentStandard.CCPA_OPT_IN.value] != newCcpaOptIn) Utils.safeExecute {
-                listener?.onConsentChangeForStandard(
-                    DefaultConsentStandard.CCPA_OPT_IN.value, newCcpaOptIn
+            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.CCPA_OPT_IN.value] != newCcpaOptIn) Utils.safeExecute {
+                listener?.onConsentChange(
+                    DefaultConsentKey.CCPA_OPT_IN.value
                 )
             }
 
@@ -404,30 +377,30 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     }
 
     private suspend fun updateTcf(
-        notify: NotificationType, cachedConsents: Map<ConsentStandard, ConsentValue?>
+        notify: NotificationType, cachedConsents: Map<ConsentKey, ConsentValue?>
     ) {
         return suspendCancellableCoroutine { continuation ->
             Usercentrics.instance.getTCFData {
-                val previousTcfString = consents[DefaultConsentStandard.TCF.value]
+                val previousTcfString = consents[DefaultConsentKey.TCF.value]
                 val newTcfString = it.tcString.ifEmpty { null }
 
                 ChartboostCoreLogger.d("Setting TCF to $newTcfString")
                 if (newTcfString.isNullOrEmpty()) {
-                    mutableConsents.remove(DefaultConsentStandard.TCF.value)
+                    mutableConsents.remove(DefaultConsentKey.TCF.value)
                 } else {
-                    mutableConsents[DefaultConsentStandard.TCF.value] = newTcfString
+                    mutableConsents[DefaultConsentKey.TCF.value] = newTcfString
                 }
 
                 when (notify) {
                     NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (newTcfString != previousTcfString) Utils.safeExecute {
-                        listener?.onConsentChangeForStandard(
-                            DefaultConsentStandard.TCF.value, newTcfString
+                        listener?.onConsentChange(
+                            DefaultConsentKey.TCF.value
                         )
                     }
 
-                    NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentStandard.TCF.value] != newTcfString) Utils.safeExecute {
-                        listener?.onConsentChangeForStandard(
-                            DefaultConsentStandard.TCF.value, newTcfString
+                    NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.TCF.value] != newTcfString) Utils.safeExecute {
+                        listener?.onConsentChange(
+                            DefaultConsentKey.TCF.value
                         )
                     }
 
@@ -436,33 +409,6 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
 
                 continuation.resume(Unit)
             }
-        }
-    }
-
-    private fun updateConsentStatus(
-        usercentricsReadyStatus: UsercentricsReadyStatus,
-        notify: NotificationType,
-        cachedConsentStatus: ConsentStatus
-    ) {
-        val newConsentStatus =
-            usercentricsReadyStatus.consents.find { it.dataProcessor == chartboostCoreDpsName }
-                ?.let {
-                    toConsentStatus(it.status)
-                } ?: ConsentStatus.UNKNOWN
-
-        val previousConsentStatus = consentStatus
-        consentStatus = newConsentStatus
-        ChartboostCoreLogger.d("Setting consent status to $newConsentStatus")
-        when (notify) {
-            NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousConsentStatus != newConsentStatus) Utils.safeExecute {
-                listener?.onConsentStatusChange(newConsentStatus)
-            }
-
-            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsentStatus != newConsentStatus) Utils.safeExecute {
-                listener?.onConsentStatusChange(newConsentStatus)
-            }
-
-            else -> Unit
         }
     }
 
@@ -475,14 +421,15 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
             val partnerId = templateIdToPartnerIdMap[consent.templateId] ?: consent.templateId
             val previousConsentStatus = partnerConsentStatus[partnerId] ?: ConsentStatus.UNKNOWN
             val newConsentStatus = toConsentStatus(consent.status)
-            mutablePartnerConsentStatus[partnerId] = newConsentStatus
+            partnerConsentStatus[partnerId] = newConsentStatus
+            mutableConsents[partnerId] = newConsentStatus.toString()
             when (notify) {
                 NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousConsentStatus != newConsentStatus) Utils.safeExecute {
-                    listener?.onPartnerConsentStatusChange(partnerId, newConsentStatus)
+                    listener?.onConsentChange(partnerId)
                 }
 
                 NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if ((oldPartnerConsents[partnerId] ?: ConsentStatus.UNKNOWN) != newConsentStatus) Utils.safeExecute {
-                    listener?.onPartnerConsentStatusChange(partnerId, newConsentStatus)
+                    listener?.onConsentChange(partnerId)
                 }
 
                 else -> Unit
@@ -502,22 +449,13 @@ class UsercentricsAdapter() : ConsentAdapter, InitializableModule {
     }
 
     private fun resetConsentsAndNotify() {
-        consentStatus = ConsentStatus.UNKNOWN
         consents.forEach {
             Utils.safeExecute {
-                listener?.onConsentChangeForStandard(it.key, null)
-            }
-        }
-        Utils.safeExecute {
-            listener?.onConsentStatusChange(ConsentStatus.UNKNOWN)
-        }
-        partnerConsentStatus.forEach {
-            Utils.safeExecute {
-                listener?.onPartnerConsentStatusChange(it.key, ConsentStatus.UNKNOWN)
+                listener?.onConsentChange(it.key)
             }
         }
         mutableConsents.clear()
-        mutablePartnerConsentStatus.clear()
+        partnerConsentStatus.clear()
     }
 
     /**
