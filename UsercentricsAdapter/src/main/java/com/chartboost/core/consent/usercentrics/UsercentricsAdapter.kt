@@ -43,6 +43,31 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         const val moduleVersion = BuildConfig.CHARTBOOST_CORE_USERCENTRICS_ADAPTER_VERSION
 
         /**
+         * The default Usercentrics template ID to Chartboost partner ID map.
+         */
+        private val DEFAULT_TEMPLATE_ID_TO_PARTNER_ID =
+            mapOf(
+                "J64M6DKwx" to "adcolony",
+                "r7rvuoyDz" to "admob",
+                "IUyljv4X5" to "amazon_aps",
+                "fHczTMzX8" to "applovin",
+                "IEbRp3saT" to "chartboost",
+                "H17alcVo_iZ7" to "fyber",
+                "S1_9Vsuj-Q" to "google_googlebidding",
+                "ROCBK21nx" to "hyprmx",
+                "ykdq8j5a9MExGT" to "inmobi",
+                "9dchbL797" to "ironsource",
+                "ax0Nljnj2szF_r" to "facebook",
+                "E6AgqirYV" to "mintegral",
+                "HWSNU_LI1" to "pangle",
+                "B1DLe54jui-X" to "tapjoy",
+                "hpb62D82I" to "unity",
+                "5bv4OvSwoXKh-G" to "verve",
+                "jk3jF2tpw" to "vungle",
+                "EMD3qUMa8" to "vungle",
+            )
+
+        /**
          * Use this to change the look and feel of the Usercentrics consent dialogs.
          * See https://docs.usercentrics.com/cmp_in_app_sdk/latest/features/customization/ for more
          * information.
@@ -52,7 +77,7 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
 
     constructor(
         options: UsercentricsOptions,
-        templateIdToPartnerIdMap: Map<String, String>,
+        templateIdToPartnerIdMap: Map<String, String> = mapOf(),
     ) : this() {
         this@UsercentricsAdapter.options = options
         this@UsercentricsAdapter.templateIdToPartnerIdMap.putAll(templateIdToPartnerIdMap)
@@ -125,7 +150,9 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
      */
     var options: UsercentricsOptions? = null
 
-    private val templateIdToPartnerIdMap: MutableMap<String, String> = mutableMapOf()
+    private val templateIdToPartnerIdMap: MutableMap<String, String> = mutableMapOf<String, String>().apply {
+        putAll(DEFAULT_TEMPLATE_ID_TO_PARTNER_ID)
+    }
 
     override suspend fun showConsentDialog(
         activity: Activity, dialogType: ConsentDialogType
