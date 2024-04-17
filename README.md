@@ -6,14 +6,14 @@ The Chartboost Core Usercentrics adapter mediates Usercentrics SDK via the Chart
 
 | Plugin              | Version |
 |---------------------|---------|
-| Chartboost Core SDK | 0.4.0+  |
+| Chartboost Core SDK | 1.0.0+  |
 | Android API         | 21+     |
 
 ## Integration
 
 In your `build.gradle`, add the following entry:
 ```
-    implementation "com.chartboost:chartboost-core-adapter-usercentrics:0.2.8.1.5"
+    implementation "com.chartboost:chartboost-core-adapter-usercentrics:1.2.8.1.0"
 ```
 
 ## Contributions
