@@ -55,11 +55,12 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
                 "H17alcVo_iZ7" to "fyber",
                 "S1_9Vsuj-Q" to "google_googlebidding",
                 "ROCBK21nx" to "hyprmx",
-                "ykdq8j5a9MExGT" to "inmobi",
+                "ykdq8J5a9MExGT" to "inmobi",
                 "9dchbL797" to "ironsource",
+                "VPSyZyTbYPSHpF" to "mobilefuse",
                 "ax0Nljnj2szF_r" to "facebook",
                 "E6AgqirYV" to "mintegral",
-                "HWSNU_LI1" to "pangle",
+                "HWSNU_Ll1" to "pangle",
                 "B1DLe54jui-X" to "tapjoy",
                 "hpb62D82I" to "unity",
                 "5bv4OvSwoXKh-G" to "verve",
@@ -350,22 +351,22 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
     ) {
         val nullableNewUspString = newUspString.ifEmpty { null }
         ChartboostCoreLogger.d("Setting USP to $nullableNewUspString")
-        val previousUsp = consents[DefaultConsentKey.USP.value]?.ifEmpty { null }
+        val previousUsp = consents[ConsentKeys.USP]?.ifEmpty { null }
         if (nullableNewUspString.isNullOrEmpty()) {
-            mutableConsents.remove(DefaultConsentKey.USP.value)
+            mutableConsents.remove(ConsentKeys.USP)
         } else {
-            mutableConsents[DefaultConsentKey.USP.value] = newUspString
+            mutableConsents[ConsentKeys.USP] = newUspString
         }
         when (notify) {
             NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousUsp != nullableNewUspString) Utils.safeExecute {
                 listener?.onConsentChange(
-                    DefaultConsentKey.USP.value
+                    ConsentKeys.USP,
                 )
             }
 
-            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.USP.value] != nullableNewUspString) Utils.safeExecute {
+            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[ConsentKeys.USP] != nullableNewUspString) Utils.safeExecute {
                 listener?.onConsentChange(
-                    DefaultConsentKey.USP.value
+                    ConsentKeys.USP,
                 )
             }
 
@@ -379,25 +380,25 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         cachedConsents: Map<ConsentKey, ConsentValue?>
     ) {
         val newCcpaOptIn = when (ccpaData.optedOut) {
-            true -> DefaultConsentValue.DENIED.value
-            false -> DefaultConsentValue.GRANTED.value
+            true -> ConsentValues.DENIED
+            false -> ConsentValues.GRANTED
             else -> null
         }
-        val previousCcpaOptIn = consents[DefaultConsentKey.CCPA_OPT_IN.value]
+        val previousCcpaOptIn = consents[ConsentKeys.CCPA_OPT_IN]
         newCcpaOptIn?.let {
-            mutableConsents[DefaultConsentKey.CCPA_OPT_IN.value] = it
-        } ?: mutableConsents.remove(DefaultConsentKey.CCPA_OPT_IN.value)
+            mutableConsents[ConsentKeys.CCPA_OPT_IN] = it
+        } ?: mutableConsents.remove(ConsentKeys.CCPA_OPT_IN)
         ChartboostCoreLogger.d("Setting CCPA opt in to $newCcpaOptIn")
         when (notify) {
             NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (previousCcpaOptIn != newCcpaOptIn) Utils.safeExecute {
                 listener?.onConsentChange(
-                    DefaultConsentKey.CCPA_OPT_IN.value
+                    ConsentKeys.CCPA_OPT_IN,
                 )
             }
 
-            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.CCPA_OPT_IN.value] != newCcpaOptIn) Utils.safeExecute {
+            NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[ConsentKeys.CCPA_OPT_IN] != newCcpaOptIn) Utils.safeExecute {
                 listener?.onConsentChange(
-                    DefaultConsentKey.CCPA_OPT_IN.value
+                    ConsentKeys.CCPA_OPT_IN,
                 )
             }
 
@@ -406,30 +407,31 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
     }
 
     private suspend fun updateTcf(
-        notify: NotificationType, cachedConsents: Map<ConsentKey, ConsentValue?>
+        notify: NotificationType,
+        cachedConsents: Map<ConsentKey, ConsentValue?>,
     ) {
         return suspendCancellableCoroutine { continuation ->
             Usercentrics.instance.getTCFData {
-                val previousTcfString = consents[DefaultConsentKey.TCF.value]
+                val previousTcfString = consents[ConsentKeys.TCF]
                 val newTcfString = it.tcString.ifEmpty { null }
 
                 ChartboostCoreLogger.d("Setting TCF to $newTcfString")
                 if (newTcfString.isNullOrEmpty()) {
-                    mutableConsents.remove(DefaultConsentKey.TCF.value)
+                    mutableConsents.remove(ConsentKeys.TCF)
                 } else {
-                    mutableConsents[DefaultConsentKey.TCF.value] = newTcfString
+                    mutableConsents[ConsentKeys.TCF] = newTcfString
                 }
 
                 when (notify) {
                     NotificationType.DIFFERENT_FROM_CURRENT_VALUE -> if (newTcfString != previousTcfString) Utils.safeExecute {
                         listener?.onConsentChange(
-                            DefaultConsentKey.TCF.value
+                            ConsentKeys.TCF,
                         )
                     }
 
-                    NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[DefaultConsentKey.TCF.value] != newTcfString) Utils.safeExecute {
+                    NotificationType.DIFFERENT_FROM_CACHED_VALUE -> if (cachedConsents[ConsentKeys.TCF] != newTcfString) Utils.safeExecute {
                         listener?.onConsentChange(
-                            DefaultConsentKey.TCF.value
+                            ConsentKeys.TCF,
                         )
                     }
 
