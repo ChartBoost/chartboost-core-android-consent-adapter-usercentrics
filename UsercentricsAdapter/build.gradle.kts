@@ -49,6 +49,7 @@ android {
     productFlavors {
         create("local")
         create("remote")
+        create("candidate")
     }
 
     buildTypes {
@@ -65,15 +66,23 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
 
 dependencies {
     "localImplementation"(project(":ChartboostCore"))
     // For external usage, please use the following production dependency.
     // You may choose a different release version.
-    // TODO: Update when core 1.0 is released
-    "remoteImplementation"(project(":ChartboostCore"))
-//    "remoteImplementation"("com.chartboost:chartboost-core-sdk:1.0.0")
+    "remoteImplementation"("com.chartboost:chartboost-core-sdk:1.0.0")
+    "candidateImplementation"("com.chartboost:chartboost-mediation-sdk:5.0.0")
 
     // Consent Management Platform SDK
     implementation("com.usercentrics.sdk:usercentrics-ui:2.14.2")
