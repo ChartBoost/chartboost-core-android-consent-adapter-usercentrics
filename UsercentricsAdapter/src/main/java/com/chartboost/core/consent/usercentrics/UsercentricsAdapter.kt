@@ -84,10 +84,10 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         this@UsercentricsAdapter.templateIdToPartnerIdMap.putAll(templateIdToPartnerIdMap)
     }
 
-    override fun updateProperties(context: Context, configuration: JSONObject) {
+    override fun updateCredentials(context: Context, credentials: JSONObject) {
         chartboostCoreDpsName =
-            configuration.optString(CHARTBOOST_CORE_DPS_KEY, DEFAULT_CHARTBOOST_CORE_DPS)
-        val optionsJson = configuration.optJSONObject(OPTIONS_KEY) ?: JSONObject()
+            credentials.optString(CHARTBOOST_CORE_DPS_KEY, DEFAULT_CHARTBOOST_CORE_DPS)
+        val optionsJson = credentials.optJSONObject(OPTIONS_KEY) ?: JSONObject()
         val settingsId = optionsJson.optString(SETTINGS_ID_KEY, "")
         val defaultLanguage = optionsJson.optString(DEFAULT_LANGUAGE_KEY, "en")
         val version = optionsJson.optString(VERSION_KEY, "latest")
@@ -96,7 +96,7 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
             stringToUsercentricsLoggerLevel(optionsJson.optString(LOGGER_LEVEL_KEY, "debug"))
         val ruleSetId = optionsJson.optString(RULE_SET_ID_KEY, "")
         val consentMediation = optionsJson.optBoolean(CONSENT_MEDIATION, false)
-        val partnerIdMapJsonObject = configuration.optJSONObject(PARTNER_ID_MAP_KEY)
+        val partnerIdMapJsonObject = credentials.optJSONObject(PARTNER_ID_MAP_KEY)
         partnerIdMapJsonObject?.keys()?.forEach {
             templateIdToPartnerIdMap[it] = partnerIdMapJsonObject.optString(it)
         }
