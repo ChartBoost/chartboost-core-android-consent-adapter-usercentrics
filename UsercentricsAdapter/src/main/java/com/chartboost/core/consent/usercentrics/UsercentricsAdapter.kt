@@ -11,17 +11,35 @@ import android.app.Activity
 import android.content.Context
 import com.chartboost.core.ChartboostCoreLogger
 import com.chartboost.core.Utils
-import com.chartboost.core.consent.*
+import com.chartboost.core.consent.ConsentAdapter
+import com.chartboost.core.consent.ConsentAdapterListener
+import com.chartboost.core.consent.ConsentDialogType
+import com.chartboost.core.consent.ConsentKey
+import com.chartboost.core.consent.ConsentKeys
+import com.chartboost.core.consent.ConsentSource
+import com.chartboost.core.consent.ConsentStatus
+import com.chartboost.core.consent.ConsentValue
+import com.chartboost.core.consent.ConsentValues
 import com.chartboost.core.error.ChartboostCoreError
 import com.chartboost.core.error.ChartboostCoreException
 import com.chartboost.core.initialization.Module
 import com.chartboost.core.initialization.ModuleConfiguration
 import com.usercentrics.ccpa.CCPAData
-import com.usercentrics.sdk.*
+import com.usercentrics.sdk.BannerSettings
+import com.usercentrics.sdk.Usercentrics
+import com.usercentrics.sdk.UsercentricsBanner
+import com.usercentrics.sdk.UsercentricsEvent
+import com.usercentrics.sdk.UsercentricsOptions
+import com.usercentrics.sdk.UsercentricsReadyStatus
+import com.usercentrics.sdk.UsercentricsServiceConsent
 import com.usercentrics.sdk.models.common.UsercentricsLoggerLevel
 import com.usercentrics.sdk.models.settings.UsercentricsConsentType
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers.Main
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
@@ -282,7 +300,19 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
                 }
             }, {
                 options?.let { options ->
-                    initializeUsercentrics(context, options)
+                    try {
+                        initializeUsercentrics(context, options)
+                    } catch (e: AssertionError) {
+                        ChartboostCoreLogger.e("Likely using both a ruleSetID and a templateID which is not allowed. $e")
+                        resumeOnce(
+                            Result.failure(
+                                ChartboostCoreException(
+                                    ChartboostCoreError.ConsentError.InitializationError
+                                )
+                            )
+                        )
+                        return@let
+                    }
                     Usercentrics.isReady({ readyStatus ->
                         CoroutineScope(dispatcher).launch {
                             resumeOnce(block(readyStatus))
