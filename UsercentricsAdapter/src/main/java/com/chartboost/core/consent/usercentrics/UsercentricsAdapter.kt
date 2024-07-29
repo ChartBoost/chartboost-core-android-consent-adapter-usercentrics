@@ -91,6 +91,7 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
          * See https://docs.usercentrics.com/cmp_in_app_sdk/latest/features/customization/ for more
          * information.
          */
+        @JvmStatic
         var bannerSettings: BannerSettings? = null
     }
 
