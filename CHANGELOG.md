@@ -5,7 +5,7 @@ Adapters are compatible with any Chartboost Core SDK version within that major v
 
 ### 1.2.15.5.0
 - This version of the adapter has been certified with Usercentrics SDK 2.15.5.
-- Update resetConsent() implementation to use Usercentrics' clearUserSession() API.
+- Update `resetConsent()` implementation to use Usercentrics' `clearUserSession()` API.
 
 ### 1.2.14.2.0
 - This version of the adapter is compatible with Chartboost Core 1.0.0.
