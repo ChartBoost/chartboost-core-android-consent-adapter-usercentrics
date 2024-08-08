@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class UsercentricsAdapter() : ConsentAdapter, Module {
 
@@ -236,11 +237,33 @@ class UsercentricsAdapter() : ConsentAdapter, Module {
         val options = options ?: UsercentricsOptions()
         val oldConsents = mutableConsents.toMap()
         mutableConsents.clear()
-        Usercentrics.reset()
+        resetUsercentrics()
         initializeUsercentrics(context, options)
         return fetchConsentInfo(
             context, NotificationType.DIFFERENT_FROM_CACHED_VALUE, oldConsents, partnerConsentStatus,
         )
+    }
+
+    private suspend fun resetUsercentrics() {
+        return suspendCoroutine {
+            fun resumeOnce(result: Result<Unit>) {
+                it.resumeWith(result)
+            }
+            Usercentrics.isReady({
+                Usercentrics.instance.clearUserSession({
+                    resumeOnce(
+                        Result.success(Unit)
+                    )
+                },
+                    {
+                        ChartboostCoreLogger.w("Unable to clear user session. Unknown reason why.")
+                        resumeOnce(Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.Unknown)))
+                    })
+            }, {
+                ChartboostCoreLogger.w("Failed to get Usercentrics instance when clearing consent.")
+                resumeOnce(Result.failure(ChartboostCoreException(ChartboostCoreError.ConsentError.InitializationError)))
+            })
+        }
     }
 
     private fun consentStatusSourceToUsercentricsConsentType(statusSource: ConsentSource): UsercentricsConsentType {
