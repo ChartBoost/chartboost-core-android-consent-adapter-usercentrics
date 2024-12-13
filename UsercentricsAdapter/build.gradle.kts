@@ -88,7 +88,7 @@ dependencies {
     implementation("com.usercentrics.sdk:usercentrics-ui:2.16.0")
 
     // Adapter Dependencies
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 }
 
