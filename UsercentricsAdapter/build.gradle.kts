@@ -34,7 +34,7 @@ android {
         minSdk = 21
         targetSdk = 33
         // If you touch the following line, don't forget to update scripts/get_rc_version.zsh
-        android.defaultConfig.versionName = System.getenv("VERSION_OVERRIDE") ?: "1.2.21.1.0"
+        android.defaultConfig.versionName = System.getenv("VERSION_OVERRIDE") ?: "1.2.22.1.0"
 
         buildConfigField(
             "String",
@@ -85,7 +85,7 @@ dependencies {
     "candidateImplementation"("com.chartboost:chartboost-mediation-sdk:5.0.0")
 
     // Consent Management Platform SDK
-    implementation("com.usercentrics.sdk:usercentrics-ui:2.21.1")
+    implementation("com.usercentrics.sdk:usercentrics-ui:2.22.1")
 
     // Adapter Dependencies
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
