@@ -6,6 +6,9 @@ Adapters are compatible with any Chartboost Core SDK version within that major v
 ### 1.2.24.4.0
 - This version of the adapter has been certified with Usercentrics SDK 2.24.4.
 
+### 1.2.24.3.0
+- This version of the adapter has been certified with Usercentrics SDK 2.24.3.
+
 ### 1.2.24.2.0
 - This version of the adapter has been certified with Usercentrics SDK 2.24.2.
 
