@@ -4,8 +4,8 @@ Note the first digit of every adapter version corresponds to the major version o
 Adapters are compatible with any Chartboost Core SDK version within that major version.
 
 ### 1.2.27.0.0
-
 - This version of the adapter has been certified with Usercentrics SDK 2.27.0.
+
 ### 1.2.26.3.0
 - This version of the adapter has been certified with Usercentrics SDK 2.26.3.
 
